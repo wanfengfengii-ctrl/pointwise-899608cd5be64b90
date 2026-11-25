@@ -9,9 +9,11 @@
 ```text
 python3 -B check_project.py
 python3 -B demo.py
+python3 -B supplement_check.py verify
+python3 -B supplement_check.py demo
 ```
 
-`check_project.py` 是物化时提供的完整回归入口。演示显式准备独立的临时站库与隔离库，写入 `samples/shift.json`，关闭站库，重开隔离库后签报，再从报告存档读回原结论。`samples/alternate.json` 给出同一外发试次原领用相同、撤批后的领用不同的对照源记录。
+`check_project.py` 是物化时提供的完整回归入口。`supplement_check.py verify` 先运行原回归，再按 `samples/supplement.json` 核验 V2 发行、实收、隔离签报、失败回滚及 V1/V2 入口隔离；`supplement_check.py demo` 在关源后签报，重开隔离库读回实际出处与首执。演示显式准备独立的临时站库与隔离库，写入 `samples/shift.json`，关闭站库，重开隔离库后签报，再从报告存档读回原结论。`samples/alternate.json` 给出同一外发试次原领用相同、撤批后的领用不同的对照源记录。
 
 ## 一天的交接
 
@@ -33,12 +35,14 @@ python3 -B demo.py
 | `record.batches.record_batch(store, working_revision, batch, events)` | 整批登记，返回工作修订号。事件类型为 `record.events.ReferenceArrival` 和 `TrialUse`。参考出处为 `record.origins.ReferenceOrigin(batch, document, line)`。 |
 | `record.revisions.freeze(store, working_revision)` | 返回新的不可变冻结号。`read_frozen_revision(store, revision)` 读回其工作修订、批次和有序事件。 |
 | `assign.ledger.online_ledger(store, revision)` | 返回原序排列的试次账行。账行的 `reference` 为实际参考事件或 `None`。 |
-| `issue.dispatch.issue_package(store, archive, revision, trials)` | 冻结修订内所选试次的集合可为空，返回归档后的 V1 字节。`issue.package.decode_envelope(wire)` 可读取发行号。 |
-| `issue.dispatch.reissue_package(archive, dispatch_id)` | 返回首次归档的字节。 |
-| `receive.register.accept_package(store, wire)` | 返回实收号 `receipt_id` 和原首执 `acknowledgment`。同号判定以发行单位及其发行号为准。 |
+| `issue.dispatch.issue_package(store, archive, revision, trials)` | 冻结修订内所选试次的集合可为空，返回归档后的 V1 字节。`issue.package.decode_envelope(wire)` 可读取两版外层的发行号。 |
+| `issue.dispatch.issue_supplement(store, archive, revision, trials, compatibility, gates)` | 面向一个相容类发行 V2 补到件，返回归档字节。`gates` 为按冻结原序非递减的 `(点号, 截点)` 对，发行时来样未知。 |
+| `issue.dispatch.reissue_package(archive, dispatch_id)` | 按发行号返回首次归档的字节，两版通用。 |
+| `receive.register.accept_package(store, wire)` | 按版本核验 V1/V2 外层、正文结构、公开边界及证据引用，返回实收号 `receipt_id` 和原首执 `acknowledgment`。同号判定以发行单位及其发行号为准。 |
 | `receive.lookup.get_received(store, receipt_id)` | 返回准确原件 `wire`、发行单位、发行号、冻结号、校验值及首执。 |
-| `review.request.audit_package(receipts, reports, request)` | `AuditRequest(receipt_id, request_id, excluded_batches=())` 指定本次来件及撤批。返回正式报告及首执。 |
-| `review.history.get_report(store, report_id)` | 直接领回报告号、请求号、实收号、撤批集合、原有序报告行及原首执。 |
+| `review.request.audit_package(receipts, reports, request)` | V1 入口。`AuditRequest(receipt_id, request_id, excluded_batches=())` 指定本次来件及撤批。返回正式报告及首执。V2 实收走补到入口，误入本口拒绝。 |
+| `review.request.audit_supplement(receipts, reports, receipt_id, request_id, arrivals)` | V2 入口。`arrivals` 为按点声明顺序生效的 `(点号, 补到样号, 文档号, 行号)` 列表，返回含 `arrivals`、`rows` 和首执的补到报告。V1 实收误入本口拒绝。 |
+| `review.history.get_report(store, report_id)` | 直接领回两版报告：V1 为报告号、请求号、实收号、撤批集合、原有序报告行及原首执；V2 另含有效到样清单和带 `source` 的参考出处。 |
 
 编号、原件文档名、相容键和单位采用非空可打印文本，首尾无空白。出处行号是正整数，出处批次与入列批次一致。参考测值用有限十进制文本记录并保留原精度与单位。试次可省略测值和单位，也可成对提供。原序是整数，与物理提交顺序无关。一个工作修订内每个序位只能出现一次，参考实例号、试次号各自在其类型内唯一。非法事件、冲突序位或重复批次使整批失败。未知修订、来件或报告编号抛出 `KeyError`，非法范围、坏件、同号异件和未知撤批抛出 `ValueError`。SQLite 签存异常沿调用返回，报告和首执一同回滚。相同报告请求号与相同实收、撤批复投可领原报告，同号异参拒绝。
 
@@ -47,5 +51,7 @@ python3 -B demo.py
 在一次计算中，按原序处理事件，每次取用消费当时已入列、相容且未被消费的最早参考。站内按原相容键的相等关系判定相容，无需换算或浮点比较。同值异出处的参考分别入列。无参考时保留试次行，参考为 `None`。以后入列的参考从其原序开始可用。
 
 V1 外层为 UTF-8 JSON，字段为 `version`、`issuer`、`dispatch_id`、`revision`、`body`、`checksum`。校验值是其余五个字段按键排序、紧凑 ASCII JSON 序列化后的 SHA-256 十六进制值，用于完整性核验。发行端将参考实例、可披露出处、批次、原序、所选试次及派生资格定版。内站试次的原名、原相容键和原测值只保留在站库。隔离端核验正文结构和可核对的引用关系，实收后保留精确字节。每次撤批计算从指定实收件独立起步，已撤批的入列和取用同时退出，只有留存的已选试次进入报告。报告中有参考时携带实例号、原序、批号及文档行号。
+
+V2 补到件沿用同一外层和校验值口径，`version` 为整数 `2`。正文只公开所选试次、交接点、同类站内参考的有序身份与出处，以及公开边界之间整段的内部领用需求量；内部试次名、批次、原序、逐条领用和相容原键留站。隔离端从空队按冻结原序接续，核准到样在声明截点入队，每次取同类最早未用参考，细节见 `SUPPLEMENT.md`。
 
 历史 V1 原配对件支持实收、按原号原样领取及零撤批签报。需要重新计算时使用带重放依据的发行件。历史合法报告始终直接从签存记录读取。

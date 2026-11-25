@@ -14,6 +14,16 @@ class SignedReport:
     acknowledgment: str
 
 
+@dataclass(frozen=True)
+class SupplementReport:
+    report_id: str
+    request_id: str
+    receipt_id: str
+    arrivals: tuple[tuple[str, str, str, int], ...]
+    rows: tuple[dict, ...]
+    acknowledgment: str
+
+
 class ReportStore:
     def __init__(self, path):
         self._db = sqlite3.connect(path)
@@ -33,6 +43,17 @@ class ReportStore:
             );
             CREATE TABLE IF NOT EXISTS report_acknowledgments (
                 number INTEGER PRIMARY KEY REFERENCES signed_reports (number),
+                token TEXT NOT NULL UNIQUE
+            );
+            CREATE TABLE IF NOT EXISTS supplement_reports (
+                number INTEGER PRIMARY KEY,
+                request_id TEXT NOT NULL UNIQUE,
+                receipt_id TEXT NOT NULL,
+                arrivals TEXT NOT NULL,
+                rows TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS supplement_acknowledgments (
+                number INTEGER PRIMARY KEY REFERENCES supplement_reports (number),
                 token TEXT NOT NULL UNIQUE
             );
         ''')
@@ -77,8 +98,50 @@ class ReportStore:
             self._db.execute('INSERT INTO report_acknowledgments VALUES (?, ?)', (number, token))
         return SignedReport(report_id, request_id, receipt_id, excluded_batches, rows, token)
 
-    def load_signed_report(self, report_id: str) -> SignedReport:
+    def load_signed_report(self, report_id: str):
+        supplement = self._read_supplement("'S-' || s.number = ?", report_id)
+        if supplement is not None:
+            return supplement
         report = self._read("'Q-' || r.number = ?", report_id)
         if report is None:
             raise KeyError(f'unknown report: {report_id}')
         return report
+
+    def _read_supplement(self, where: str, value: str) -> SupplementReport | None:
+        result = self._db.execute(f'''
+            SELECT s.number, s.request_id, s.receipt_id, s.arrivals, s.rows, a.token
+            FROM supplement_reports AS s
+            JOIN supplement_acknowledgments AS a ON a.number = s.number
+            WHERE {where}
+        ''', (value,)).fetchone()
+        if result is None:
+            return None
+        number, request, receipt, arrivals, rows, token = result
+        return SupplementReport(
+            f'S-{number}', request, receipt,
+            tuple(tuple(entry) for entry in json.loads(arrivals)),
+            tuple(json.loads(rows)), token,
+        )
+
+    def save_supplement_report(
+        self,
+        request_id: str,
+        receipt_id: str,
+        arrivals: tuple[tuple[str, str, str, int], ...],
+        rows: tuple[dict, ...],
+    ) -> SupplementReport:
+        with self._transaction():
+            existing = self._read_supplement('s.request_id = ?', request_id)
+            if existing is not None:
+                if (existing.receipt_id, existing.arrivals) != (receipt_id, arrivals):
+                    raise ValueError(f'report request is already bound: {request_id}')
+                return existing
+            cursor = self._db.execute('''
+                INSERT INTO supplement_reports (request_id, receipt_id, arrivals, rows)
+                VALUES (?, ?, ?, ?)
+            ''', (request_id, receipt_id, json.dumps(arrivals), json.dumps(rows)))
+            number = cursor.lastrowid
+            report_id = f'S-{number}'
+            token = f'signed/{report_id}'
+            self._db.execute('INSERT INTO supplement_acknowledgments VALUES (?, ?)', (number, token))
+        return SupplementReport(report_id, request_id, receipt_id, arrivals, rows, token)

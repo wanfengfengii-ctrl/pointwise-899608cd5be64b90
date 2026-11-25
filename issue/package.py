@@ -4,6 +4,8 @@ import json
 
 
 V1_VERSION = 1
+V2_VERSION = 2
+SUPPORTED_VERSIONS = (V1_VERSION, V2_VERSION)
 _FIELDS = {'version', 'issuer', 'dispatch_id', 'revision', 'body'}
 
 
@@ -16,8 +18,14 @@ def package_checksum(payload: dict) -> str:
 
 
 def encode_package(issuer: str, dispatch_id: str, revision: str, body: dict) -> bytes:
+    return encode_envelope(issuer, dispatch_id, revision, body, V1_VERSION)
+
+
+def encode_envelope(issuer: str, dispatch_id: str, revision: str, body: dict, version: int) -> bytes:
+    if version not in SUPPORTED_VERSIONS:
+        raise ValueError('unsupported package version')
     payload = {
-        'version': V1_VERSION,
+        'version': version,
         'issuer': issuer,
         'dispatch_id': dispatch_id,
         'revision': revision,
@@ -51,7 +59,7 @@ def decode_envelope(wire: bytes) -> dict:
         if type(envelope) is not dict or envelope.keys() != _FIELDS | {'checksum'}:
             raise ValueError('invalid package envelope fields')
         version = envelope['version']
-        if type(version) is not int or version != V1_VERSION:
+        if type(version) is not int or version not in SUPPORTED_VERSIONS:
             raise ValueError('unsupported package envelope version')
         for name in ('issuer', 'dispatch_id', 'revision'):
             if not valid_identifier(envelope[name]):
@@ -62,6 +70,8 @@ def decode_envelope(wire: bytes) -> dict:
         payload = {name: envelope[name] for name in _FIELDS}
         if not hmac.compare_digest(checksum, package_checksum(payload)):
             raise ValueError('package checksum mismatch')
+        if wire != _canonical_json(envelope):
+            raise ValueError('package encoding is not the canonical fixed envelope')
     except (UnicodeError, RecursionError) as error:
         raise ValueError('invalid package encoding') from error
     return envelope
