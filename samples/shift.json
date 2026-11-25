@@ -1,0 +1,27 @@
+[
+  {
+    "batch": "B1",
+    "events": [
+      {"kind":"arrival","position":10,"batch":"B1","reference":"R1","compatibility":"private-alloy-key-27","value":"17.500","unit":"MPa","origin":{"batch":"B1","document":"shift-register","line":1}},
+      {"kind":"arrival","position":50,"batch":"B1","reference":"L","compatibility":"private-alloy-key-27","value":"18.125","unit":"MPa","origin":{"batch":"B1","document":"shift-register","line":5}}
+    ]
+  },
+  {
+    "batch": "B2",
+    "events": [
+      {"kind":"arrival","position":20,"batch":"B2","reference":"R2","compatibility":"private-alloy-key-27","value":"17.500","unit":"MPa","origin":{"batch":"B2","document":"shift-register","line":2}}
+    ]
+  },
+  {
+    "batch": "BH",
+    "events": [
+      {"kind":"use","position":30,"batch":"BH","trial":"bench-only-H","compatibility":"private-alloy-key-27","value":"8843.937100","unit":"MPa"}
+    ]
+  },
+  {
+    "batch": "BV",
+    "events": [
+      {"kind":"use","position":40,"batch":"BV","trial":"V","compatibility":"private-alloy-key-27","value":"672.1030","unit":"MPa"}
+    ]
+  }
+]

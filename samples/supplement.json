@@ -1,0 +1,22 @@
+{
+  "compatibility": "private-alloy-key-27",
+  "trials": ["W", "V"],
+  "gates": [["before", 0], ["after-V", 30]],
+  "common_batches": [
+    {"batch":"BU","events":[{"kind":"arrival","position":-5,"batch":"BU","reference":"U","compatibility":"private-other-class","value":"17.500","unit":"MPa","origin":{"batch":"BU","document":"unrelated-register","line":1}}]},
+    {"batch":"B1","events":[{"kind":"arrival","position":10,"batch":"B1","reference":"R1","compatibility":"private-alloy-key-27","value":"17.500","unit":"MPa","origin":{"batch":"B1","document":"shift-register","line":1}}]},
+    {"batch":"B2","events":[{"kind":"arrival","position":20,"batch":"B2","reference":"R2","compatibility":"private-alloy-key-27","value":"17.500","unit":"MPa","origin":{"batch":"B2","document":"shift-register","line":2}}]},
+    {"batch":"BH","events":[{"kind":"use","position":25,"batch":"BH","trial":"bench-only-middle","compatibility":"private-alloy-key-27","value":"8843.937100","unit":"MPa"}]},
+    {"batch":"BV","events":[{"kind":"use","position":30,"batch":"BV","trial":"V","compatibility":"private-alloy-key-27"}]},
+    {"batch":"BW","events":[{"kind":"use","position":40,"batch":"BW","trial":"W","compatibility":"private-alloy-key-27"}]}
+  ],
+  "a_only": {"batch":"BE","events":[{"kind":"use","position":5,"batch":"BE","trial":"bench-only-early","compatibility":"private-alloy-key-27","value":"9342.281100","unit":"MPa"}]},
+  "cases": [
+    {"name":"none","arrivals":[],"expected":{"A":["R2",null],"B":["R2",null]}},
+    {"name":"pre-X","arrivals":[["before","X","partner-register",1]],"expected":{"A":["R2",null],"B":["R1","R2"]}},
+    {"name":"pre-XY","arrivals":[["before","X","partner-register",1],["before","Y","partner-register",2]],"expected":{"A":["R1","R2"],"B":["Y","R1"]}},
+    {"name":"pre-XYZ","arrivals":[["before","X","partner-register",1],["before","Y","partner-register",2],["before","Z","partner-register",3]],"expected":{"A":["Z","R1"],"B":["Y","Z"]}},
+    {"name":"late-X","arrivals":[["after-V","X","partner-register",1]],"expected":{"A":["R2","X"],"B":["R2","X"]}},
+    {"name":"both","arrivals":[["after-V","Y","partner-register",2],["before","X","partner-register",1]],"expected":{"A":["R2","Y"],"B":["R1","R2"]}}
+  ]
+}

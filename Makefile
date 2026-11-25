@@ -1,0 +1,7 @@
+.PHONY: verify demo
+
+verify:
+	python3 -B check_project.py
+
+demo:
+	python3 -B demo.py
